@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --green:   #1a7a3c;
+    --green2:  #25a35a;
+    --green3:  #d4edda;
+    --amber:   #e6a817;
+    --amber2:  #fff3cd;
+    --blue:    #1565c0;
+    --blue2:   #e3f2fd;
+    --red:     #c62828;
+    --red2:    #ffebee;
+    --gray:    #f5f7f5;
+    --dark:    #1b2e1b;
+    --border:  #d0ddd0;
+    --text:    #2c3e2c;
+    --muted:   #6b7b6b;
+    --radius:  10px;
+    --shadow:  0 2px 12px rgba(0,0,0,.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--gray);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--green);
+    color: #fff;
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  }
+  header h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: .3px; }
+  header span { font-size: .8rem; opacity: .8; }
+  .live-dot {
+    display: inline-block; width: 8px; height: 8px;
+    background: #4caf50; border-radius: 50%;
+    margin-right: 6px; animation: pulse 1.8s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* ── Nav Tabs ── */
+  nav {
+    background: #fff;
+    border-bottom: 2px solid var(--border);
+    padding: 0 28px;
+    display: flex; gap: 4px;
+  }
+  nav button {
+    padding: 12px 18px; border: none; background: none;
+    cursor: pointer; font-size: .875rem; font-weight: 500;
+    color: var(--muted); border-bottom: 3px solid transparent;
+    transition: .2s; margin-bottom: -2px;
+  }
+  nav button.active { color: var(--green); border-bottom-color: var(--green); }
+  nav button:hover { color: var(--green2); }
+
+  /* ── Layout ── */
+  main { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── KPI Cards ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px; margin-bottom: 24px;
+  }
+  .kpi {
+    background: #fff; border-radius: var(--radius);
+    padding: 20px; box-shadow: var(--shadow);
+    border-left: 4px solid var(--green2);
+    position: relative; overflow: hidden;
+  }
+  .kpi.amber { border-left-color: var(--amber); }
+  .kpi.blue  { border-left-color: var(--blue); }
+  .kpi.red   { border-left-color: var(--red); }
+  .kpi label { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+  .kpi .val  { font-size: 2rem; font-weight: 700; color: var(--dark); line-height: 1.1; margin: 4px 0 2px; }
+  .kpi .sub  { font-size: .75rem; color: var(--muted); }
+  .kpi .icon { position: absolute; right: 16px; top: 16px; font-size: 1.6rem; opacity: .15; }
+
+  /* ── Chart Cards ── */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 20px; margin-bottom: 24px;
+  }
+  .chart-card {
+    background: #fff; border-radius: var(--radius);
+    padding: 20px; box-shadow: var(--shadow);
+  }
+  .chart-card h3 { font-size: .9rem; font-weight: 600; margin-bottom: 16px; color: var(--dark); }
+  .chart-card canvas { max-height: 260px; }
+  .chart-card.wide { grid-column: 1 / -1; }
+
+  /* ── Tables ── */
+  .table-card {
+    background: #fff; border-radius: var(--radius);
+    box-shadow: var(--shadow); overflow: hidden; margin-bottom: 24px;
+  }
+  .table-card h3 {
+    font-size: .9rem; font-weight: 600; padding: 16px 20px;
+    border-bottom: 1px solid var(--border); color: var(--dark);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  thead th { background: var(--gray); padding: 10px 16px; text-align: left; font-size: .75rem;
+              color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--gray); }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 20px;
+    font-size: .72rem; font-weight: 600;
+  }
+  .badge-high   { background: var(--green3); color: var(--green); }
+  .badge-medium { background: var(--amber2); color: #8a5e00; }
+  .badge-low    { background: var(--red2); color: var(--red); }
+  .badge-wa     { background: #e8f5e9; color: #1b5e20; }
+  .badge-ivr    { background: #e3f2fd; color: #0d47a1; }
+  .badge-sms    { background: #fff3e0; color: #e65100; }
+  .badge-rep    { background: #f3e5f5; color: #4a148c; }
+
+  /* ── Progress Bar ── */
+  .progress-wrap { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .progress-bar  { height: 100%; background: var(--green2); border-radius: 4px; transition: width .4s; }
+
+  /* ── Funnel ── */
+  .funnel { display: flex; flex-direction: column; gap: 10px; padding: 8px 0; }
+  .funnel-row { display: flex; align-items: center; gap: 12px; }
+  .funnel-label { width: 90px; font-size: .78rem; color: var(--muted); text-align: right; flex-shrink: 0; }
+  .funnel-bar-wrap { flex: 1; height: 28px; background: var(--gray); border-radius: 6px; overflow: hidden; }
+  .funnel-bar { height: 100%; border-radius: 6px; display: flex; align-items: center;
+                justify-content: flex-end; padding-right: 8px;
+                font-size: .75rem; font-weight: 600; color: #fff; transition: width .6s; }
+  .funnel-val { width: 60px; font-size: .82rem; font-weight: 600; color: var(--dark); text-align: right; }
+
+  /* ── Campaign Planner Form ── */
+  .form-card {
+    background: #fff; border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 24px; margin-bottom: 24px;
+  }
+  .form-card h3 { font-size: .95rem; font-weight: 700; margin-bottom: 20px; }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group label { font-size: .78rem; color: var(--muted); font-weight: 500; }
+  .form-group input, .form-group select {
+    padding: 9px 12px; border: 1px solid var(--border); border-radius: 7px;
+    font-size: .875rem; outline: none; transition: .15s;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: var(--green2); }
+  .btn {
+    padding: 10px 24px; border: none; border-radius: 7px; cursor: pointer;
+    font-size: .875rem; font-weight: 600; transition: .15s;
+  }
+  .btn-primary { background: var(--green); color: #fff; }
+  .btn-primary:hover { background: var(--green2); }
+  .btn-secondary { background: var(--gray); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--border); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ── Content Demo ── */
+  .content-demo {
+    background: #fff; border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 24px; margin-bottom: 24px;
+  }
+  .content-demo h3 { font-size: .95rem; font-weight: 700; margin-bottom: 20px; }
+  .content-output {
+    background: var(--gray); border-radius: 8px; padding: 16px;
+    font-size: .9rem; line-height: 1.6; min-height: 80px;
+    white-space: pre-wrap; color: var(--dark); border-left: 4px solid var(--green2);
+  }
+  .channel-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .channel-tab {
+    padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border);
+    background: #fff; cursor: pointer; font-size: .8rem; transition: .15s;
+  }
+  .channel-tab.active { background: var(--green); color: #fff; border-color: var(--green); }
+
+  /* ── Alert ── */
+  .alert { padding: 12px 16px; border-radius: 8px; font-size: .85rem; margin-bottom: 16px; }
+  .alert-info    { background: var(--blue2); color: var(--blue); border: 1px solid #90caf9; }
+  .alert-success { background: var(--green3); color: var(--green); border: 1px solid #a5d6a7; }
+  .alert-warn    { background: var(--amber2); color: #8a5e00; border: 1px solid #ffe082; }
+
+  /* ── Spinner ── */
+  .spinner {
+    display: inline-block; width: 18px; height: 18px;
+    border: 3px solid rgba(255,255,255,.4); border-top-color: #fff;
+    border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Responsive ── */
+  @media (max-width: 700px) {
+    main { padding: 16px; }
+    .chart-grid { grid-template-columns: 1fr; }
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    nav button { padding: 10px 12px; font-size: .8rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Agri-Marketing AI</h1>
+</header>
+
+<nav>
+  <button class="active" onclick="switchTab('overview')">Overview</button>
+  <button onclick="switchTab('funnel')">Campaign Funnel</button>
+  <button onclick="switchTab('growers')">Growers</button>
+  <button onclick="switchTab('planner')">Campaign Planner</button>
+  <button onclick="switchTab('content')">Content Demo</button>
+  <button onclick="switchTab('engines')">AI Engines</button>
+</nav>
+
+<main>
+
+<!-- ════════════════════════ TAB: OVERVIEW ════════════════════════ -->
+<div id="tab-overview" class="tab-content active">
+  <div class="kpi-grid" id="kpi-grid">
+    <div class="kpi"><span class="icon"></span><label>Total Messages</label><div class="val" id="kpi-sent">—</div><div class="sub">WhatsApp campaign log</div></div>
+    <div class="kpi amber"><span class="icon"></span><label>Delivery Rate</label><div class="val" id="kpi-delivery">—</div><div class="sub">Baseline benchmark</div></div>
+    <div class="kpi blue"><span class="icon"></span><label>Open Rate</label><div class="val" id="kpi-open">—</div><div class="sub">Target → 35%+</div></div>
+    <div class="kpi green"><span class="icon"></span><label>Click Rate</label><div class="val" id="kpi-click">—</div><div class="sub">Target → 12%+</div></div>
+    <div class="kpi red"><span class="icon"></span><label>Total Growers</label><div class="val" id="kpi-growers">6,000</div><div class="sub">Across 8 states</div></div>
+    <div class="kpi blue"><span class="icon"></span><label>Micro-Segments</label><div class="val">~200</div><div class="sub">vs 5-10 traditional</div></div>
+    <div class="kpi amber"><span class="icon"></span><label>Crops Covered</label><div class="val">9</div><div class="sub">Rabi + Kharif</div></div>
+    <div class="kpi"><span class="icon"></span><label>Languages</label><div class="val">6</div><div class="sub">Hindi, Punjabi, Marathi…</div></div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Engagement by Campaign Product</h3>
+      <canvas id="chart-product"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Grower Device Type Distribution</h3>
+      <canvas id="chart-device"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Grower Language Mix</h3>
+      <canvas id="chart-language"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Crop Distribution</h3>
+      <canvas id="chart-crop"></canvas>
+    </div>
+    <div class="chart-card wide">
+      <h3>Message Volume & Click Rate Over Time</h3>
+      <canvas id="chart-timeline"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════ TAB: FUNNEL ════════════════════════ -->
+<div id="tab-funnel" class="tab-content">
+  <div class="alert alert-info">
+    ℹ️ Attribution window: <strong>14 days</strong> post-send. Conversion = purchase of campaign product
+    at a retailer in the same tehsil.
+  </div>
+
+  <div class="chart-card wide" style="margin-bottom:20px">
+    <h3>Conversion Funnel (All Campaigns)</h3>
+    <div class="funnel" id="funnel-viz"></div>
+  </div>
+
+  <div class="table-card">
+    <h3>Campaign Breakdown by Product</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Campaign</th><th>Crop</th><th>Product</th>
+          <th>Sent</th><th>Delivered</th><th>Opened</th><th>Clicked</th>
+          <th>Delivery %</th><th>Open %</th><th>Click %</th>
+        </tr>
+      </thead>
+      <tbody id="funnel-table-body"></tbody>
+    </table>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Click Rate by Language</h3>
+      <canvas id="chart-lang-click"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Click Rate by State</h3>
+      <canvas id="chart-state-click"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════ TAB: GROWERS ════════════════════════ -->
+<div id="tab-growers" class="tab-content">
+  <div class="form-card">
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+      <div class="form-group">
+        <label>State</label>
+        <input id="filter-state" placeholder="e.g. Punjab" style="width:160px"/>
+      </div>
+      <div class="form-group">
+        <label>Crop</label>
+        <select id="filter-crop" style="width:140px">
+          <option value="">All crops</option>
+          <option>wheat</option><option>mustard</option><option>chickpea</option>
+          <option>potato</option><option>barley</option><option>maize</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Device</label>
+        <select id="filter-device" style="width:140px">
+          <option value="">All devices</option>
+          <option>smartphone</option><option>keypad</option><option>unknown</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="loadGrowerTable()">Search</button>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <h3>Grower Profiles <span id="grower-count" style="color:var(--muted);font-weight:400"></span></h3>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>State</th><th>Tehsil</th><th>Crop</th>
+          <th>Language</th><th>Device</th><th>Age</th><th>Farm (ac)</th>
+        </tr>
+      </thead>
+      <tbody id="grower-table-body">
+        <tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">
+          Click Search to load growers (or connect API)
+        </td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════ TAB: CAMPAIGN PLANNER ════════════════════════ -->
+<div id="tab-planner" class="tab-content">
+  <div class="alert alert-info">
+    This triggers the full 4-engine pipeline: Stock check → Receptivity scoring →
+    Micro-segment → Bandit channel decision → LLM content generation.
+  </div>
+
+  <div class="form-card">
+    <h3>Launch Campaign Plan</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Campaign ID</label>
+        <input id="p-campaign-id" value="CMP_RABI25_AI_DEMO"/>
+      </div>
+      <div class="form-group">
+        <label>Target Crop</label>
+        <select id="p-crop">
+          <option value="">All crops</option>
+          <option>wheat</option><option>mustard</option><option>chickpea</option>
+          <option>potato</option><option>barley</option><option>maize</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Max Growers</label>
+        <input id="p-max-growers" type="number" value="200" min="1" max="6000"/>
+      </div>
+      <div class="form-group">
+        <label>Min Receptivity Score</label>
+        <input id="p-min-rec" type="number" value="0.03" min="0" max="1" step="0.01"/>
+      </div>
+      <div class="form-group">
+        <label>Min Stock Rate</label>
+        <input id="p-min-stock" type="number" value="0.2" min="0" max="1" step="0.05"/>
+      </div>
+      <div class="form-group">
+        <label>Anthropic API Key (optional)</label>
+        <input id="p-api-key" type="password" placeholder="sk-ant-... (for LLM content)"/>
+      </div>
+    </div>
+    <div style="margin-top:20px;display:flex;gap:12px;align-items:center">
+      <button class="btn btn-primary" id="btn-plan" onclick="runCampaignPlan()">
+        ▶ Run Campaign Plan
+      </button>
+      <span id="plan-status" style="font-size:.85rem;color:var(--muted)"></span>
+    </div>
+  </div>
+
+  <div id="plan-results" style="display:none">
+    <div class="kpi-grid" id="plan-kpis"></div>
+    <div class="chart-card wide">
+      <h3>Channel Mix — AI Targeting Decision</h3>
+      <canvas id="chart-channel-mix" style="max-height:220px"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════ TAB: CONTENT DEMO ════════════════════════ -->
+<div id="tab-content" class="tab-content">
+  <div class="content-demo">
+    <h3>Engine 1: Generate Personalised Content</h3>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-group">
+        <label>Crop</label>
+        <select id="c-crop">
+          <option>wheat</option><option>mustard</option><option>chickpea</option>
+          <option>potato</option><option>barley</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Growth Stage</label>
+        <select id="c-stage">
+          <option>pre-sowing</option><option>tillering</option>
+          <option>flowering</option><option>grain filling</option><option>maturation</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Language</label>
+        <select id="c-lang">
+          <option>Hindi</option><option>Punjabi</option><option>Marathi</option>
+          <option>Gujarati</option><option>Kannada</option><option>Bengali</option>
+          <option>Tamil</option><option>Telugu</option><option>Odia</option>
+          <option>Assamese</option><option>Malayalam</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>State</label>
+        <input id="c-state" value="Punjab"/>
+      </div>
+      <div class="form-group">
+        <label>Active Threat (optional)</label>
+        <input id="c-threat" placeholder="e.g. yellow rust"/>
+      </div>
+      <div class="form-group">
+        <label>Days to Next Stage</label>
+        <input id="c-days" type="number" value="7"/>
+      </div>
+    </div>
+
+    <div class="channel-tabs" id="channel-tabs">
+      <div class="channel-tab active" data-fmt="whatsapp_rich">WhatsApp Rich</div>
+      <div class="channel-tab" data-fmt="whatsapp_text">WhatsApp Text</div>
+      <div class="channel-tab" data-fmt="ivr_voice">IVR Voice</div>
+      <div class="channel-tab" data-fmt="sms">SMS</div>
+      <div class="channel-tab" data-fmt="field_rep_brief">Field Rep Brief</div>
+      <div class="channel-tab" data-fmt="video_thumbnail">🎬 Video Visual</div>
+    </div>
+
+    <div style="margin-bottom:16px">
+      <button class="btn btn-primary" id="btn-gen" onclick="generateContent()">
+         Generate Content
+      </button>
+      <span id="gen-status" style="margin-left:12px;font-size:.82rem;color:var(--muted)"></span>
+    </div>
+
+    <div class="content-output" id="content-output">
+      Select options above and click Generate Content to see AI-generated marketing copy.
+    </div>
+
+    <div style="margin-top:8px;display:flex;gap:16px">
+      <span id="content-chars" style="font-size:.75rem;color:var(--muted)"></span>
+      <span id="content-model" style="font-size:.75rem;color:var(--muted)"></span>
+    </div>
+  </div>
+
+  <div class="content-demo">
+    <h3>Engine 3: Receptivity Score Demo</h3>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-group">
+        <label>Historical Open Rate</label>
+        <input id="r-open" type="number" value="0.25" min="0" max="1" step="0.05"/>
+      </div>
+      <div class="form-group">
+        <label>Historical Click Rate</label>
+        <input id="r-click" type="number" value="0.08" min="0" max="1" step="0.01"/>
+      </div>
+      <div class="form-group">
+        <label>Device Type</label>
+        <select id="r-device">
+          <option>smartphone</option><option>keypad</option><option>unknown</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Days to Harvest</label>
+        <input id="r-harvest" type="number" value="25" min="0" max="200"/>
+      </div>
+      <div class="form-group">
+        <label>Stock Rate in Tehsil</label>
+        <input id="r-stock" type="number" value="0.8" min="0" max="1" step="0.1"/>
+      </div>
+      <div class="form-group">
+        <label>Season Progress (0–1)</label>
+        <input id="r-season" type="number" value="0.65" min="0" max="1" step="0.05"/>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="scoreReceptivity()">Score Receptivity</button>
+    <div id="receptivity-result" style="margin-top:16px"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════ TAB: ENGINES ════════════════════════ -->
+<div id="tab-engines" class="tab-content">
+
+  <!-- Row 1: bandit chart + live model health -->
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Engine 2: Bandit Arm Performance <small style="font-weight:400;color:var(--muted)">(live from API)</small></h3>
+      <canvas id="chart-bandit"></canvas>
+      <div id="bandit-stats-summary"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Model Load Status <small style="font-weight:400;color:var(--muted)">(live from /health)</small></h3>
+      <div id="engine-health-content">
+        <div style="text-align:center;padding:24px;color:var(--muted);font-size:.85rem">⏳ Checking API…</div>
+      </div>
+      <div style="margin-top:16px;font-size:.82rem;line-height:1.9;color:var(--text)">
+        <div><strong>Engine 1</strong> — GenAI Content · Gemini 3 Flash · 11 languages · Sarvam TTS · Video thumbnails</div>
+        <div><strong>Engine 2</strong> — LinUCB Bandit · 60 arms · α=0.5 · context_dim=18</div>
+        <div><strong>Engine 3</strong> — XGBoost · 20 features · 5-fold CV</div>
+        <div><strong>Engine 4</strong> — HDBSCAN · 64-dim PCA · ~200 segments</div>
+        <div style="margin-top:8px;padding:8px;background:var(--green3);border-radius:6px">
+          <strong>Attribution:</strong> 14-day POS window · tehsil-level · stock-gated sends
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Micro-segment profiles (live) -->
+  <div class="table-card" style="margin-bottom:20px">
+    <h3>Engine 4: Micro-Segment Profiles <span id="segment-total" style="color:var(--muted);font-weight:400;font-size:.82rem"></span></h3>
+    <table>
+      <thead>
+        <tr><th>Segment ID</th><th>Size</th><th>Crop</th><th>Language</th><th>Device</th><th>Avg Click Rate</th></tr>
+      </thead>
+      <tbody id="segment-summary-body">
+        <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- API Reference -->
+  <div class="table-card">
+    <h3>API Endpoints Reference</h3>
+    <table>
+      <thead><tr><th>Method</th><th>Endpoint</th><th>Engine</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge badge-high">GET</span></td><td><code>/health</code></td><td>—</td><td>System health + model load status</td></tr>
+        <tr><td><span class="badge badge-ivr">GET</span></td><td><code>/api/v1/growers</code></td><td>—</td><td>List growers (filter by state/crop/device)</td></tr>
+        <tr><td><span class="badge badge-wa">POST</span></td><td><code>/api/v1/content/generate</code></td><td>Engine 1</td><td>Generate personalised content</td></tr>
+        <tr><td><span class="badge badge-wa">POST</span></td><td><code>/api/v1/content/batch</code></td><td>Engine 1</td><td>Batch content (up to 100 growers)</td></tr>
+        <tr><td><span class="badge badge-wa">POST</span></td><td><code>/api/v1/targeting/decide</code></td><td>Engine 2</td><td>LinUCB channel + timing decision</td></tr>
+        <tr><td><span class="badge badge-wa">POST</span></td><td><code>/api/v1/targeting/feedback</code></td><td>Engine 2</td><td>Bandit reward update</td></tr>
+        <tr><td><span class="badge badge-ivr">GET</span></td><td><code>/api/v1/targeting/stats</code></td><td>Engine 2</td><td>Arm empirical reward rates</td></tr>
+        <tr><td><span class="badge badge-wa">POST</span></td><td><code>/api/v1/receptivity/score</code></td><td>Engine 3</td><td>Single-grower receptivity score</td></tr>
+        <tr><td><span class="badge badge-wa">POST</span></td><td><code>/api/v1/receptivity/batch</code></td><td>Engine 3</td><td>Batch scoring (up to 1,000)</td></tr>
+        <tr><td><span class="badge badge-wa">POST</span></td><td><code>/api/v1/segment/assign</code></td><td>Engine 4</td><td>Assign grower to micro-segment</td></tr>
+        <tr><td><span class="badge badge-ivr">GET</span></td><td><code>/api/v1/segment/profiles</code></td><td>Engine 4</td><td>List all segment profiles</td></tr>
+        <tr><td><span class="badge badge-wa">POST</span></td><td><code>/api/v1/campaign/plan</code></td><td>All</td><td>Full 4-engine campaign plan</td></tr>
+        <tr><td><span class="badge badge-wa">POST</span></td><td><code>/api/v1/campaign/feedback</code></td><td>All</td><td>Post-campaign bandit reward update</td></tr>
+        <tr><td><span class="badge badge-ivr">GET</span></td><td><code>/api/v1/analytics/campaign</code></td><td>—</td><td>Campaign funnel analytics</td></tr>
+        <tr><td><span class="badge badge-ivr">GET</span></td><td><code>/api/v1/analytics/pos</code></td><td>—</td><td>POS sales analytics</td></tr>
+        <tr><td><span class="badge badge-wa">POST</span></td><td><code>/api/v1/stock/check</code></td><td>—</td><td>Stock availability for tehsil</td></tr>
+        <tr><td><span class="badge badge-wa">POST</span></td><td><code>/api/v1/attribution/compute</code></td><td>—</td><td>14-day POS attribution</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</main>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// Config — change API_BASE if your server runs on a different port
+// ─────────────────────────────────────────────────────────────
+const API_BASE = "http://localhost:8000";
+
+// ─────────────────────────────────────────────────────────────
+// API helper — throws on non-OK; callers handle errors
+// ─────────────────────────────────────────────────────────────
+async function api(path, method = "GET", body = null) {
+  const opts = { method, headers: { "Content-Type": "application/json" } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API_BASE + path, opts);
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+// ─────────────────────────────────────────────────────────────
+// Connection banner helpers
+// ─────────────────────────────────────────────────────────────
+function showBanner(msg, type = "warn") {
+  let el = document.getElementById("api-banner");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "api-banner";
+    el.style.cssText =
+      "position:fixed;top:60px;left:0;right:0;z-index:999;padding:10px 24px;" +
+      "font-size:.85rem;font-weight:500;display:flex;align-items:center;gap:10px;";
+    document.body.appendChild(el);
+  }
+  const colors = {
+    warn:    { bg:"#fff3cd", color:"#856404", border:"#ffc107" },
+    error:   { bg:"#f8d7da", color:"#842029", border:"#f5c2c7" },
+    success: { bg:"#d1e7dd", color:"#0f5132", border:"#badbcc" },
+  };
+  const c = colors[type] || colors.warn;
+  el.style.background = c.bg;
+  el.style.color = c.color;
+  el.style.borderBottom = `2px solid ${c.border}`;
+  el.innerHTML = msg + `<span style="margin-left:auto;cursor:pointer;font-size:1.1rem" onclick="this.parentElement.remove()">×</span>`;
+}
+
+function clearBanner() {
+  const el = document.getElementById("api-banner");
+  if (el) el.remove();
+}
+
+// ─────────────────────────────────────────────────────────────
+// Loading / error state helpers for chart cards
+// ─────────────────────────────────────────────────────────────
+function setLoading(id, msg = "Loading…") {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.parentElement.querySelector("canvas")?.style && (el.parentElement.querySelector("canvas").style.display = "none");
+  let ld = el.parentElement.querySelector(".card-loading");
+  if (!ld) {
+    ld = document.createElement("div");
+    ld.className = "card-loading";
+    ld.style.cssText = "text-align:center;padding:32px;color:var(--muted);font-size:.85rem";
+    el.parentElement.appendChild(ld);
+  }
+  ld.innerHTML = `<div style="margin-bottom:8px">⏳</div>${msg}`;
+}
+
+function setError(containerId, msg) {
+  const container = document.getElementById(containerId)?.parentElement
+    || document.getElementById(containerId);
+  if (!container) return;
+  container.querySelector("canvas") && (container.querySelector("canvas").style.display = "none");
+  let er = container.querySelector(".card-error");
+  if (!er) {
+    er = document.createElement("div");
+    er.className = "card-error";
+    er.style.cssText =
+      "text-align:center;padding:24px;color:#842029;font-size:.82rem;" +
+      "background:#f8d7da;border-radius:6px;margin:8px 0";
+    container.appendChild(er);
+  }
+  er.innerHTML = `⚠️ ${msg}`;
+}
+
+function clearState(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = "";
+  const parent = el.parentElement;
+  parent.querySelector(".card-loading")?.remove();
+  parent.querySelector(".card-error")?.remove();
+}
+
+// ─────────────────────────────────────────────────────────────
+// Chart factory
+// ─────────────────────────────────────────────────────────────
+const COLORS = [
+  "#1a7a3c","#25a35a","#e6a817","#1565c0","#c62828",
+  "#6d4c41","#00838f","#7b1fa2","#ef6c00","#2e7d32",
+];
+const chartInstances = {};
+
+function mkChart(id, type, labels, datasets, opts = {}) {
+  if (chartInstances[id]) chartInstances[id].destroy();
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  clearState(id);
+  ctx.style.display = "";
+  chartInstances[id] = new Chart(ctx, {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: { legend: { position: "bottom", labels: { font: { size: 11 } } } },
+      ...opts,
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Tab switching
+// ─────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll(".tab-content").forEach((el) => el.classList.remove("active"));
+  document.querySelectorAll("nav button").forEach((el) => el.classList.remove("active"));
+  document.getElementById("tab-" + name).classList.add("active");
+  event.target.classList.add("active");
+  if (name === "funnel"  && !window._funnelLoaded)  loadFunnelTab();
+  if (name === "growers" && !window._growerLoaded)  loadGrowerTable();
+  if (name === "engines")                           loadEnginesTab();
+}
+
+// ─────────────────────────────────────────────────────────────
+// TAB: OVERVIEW
+// ─────────────────────────────────────────────────────────────
+async function loadOverview() {
+  // 1. Health check first
+  try {
+    await api("/health");
+    clearBanner();
+  } catch (e) {
+    showBanner(
+      "⚠️ <strong>API server is offline.</strong> Start it with: " +
+      "<code>uvicorn api.main:app --reload --port 8000</code> then reload this page.",
+      "error"
+    );
+    return;
+  }
+
+  // 2. Campaign analytics
+  setLoading("chart-product", "Fetching campaign data…");
+  setLoading("chart-device",  "Fetching device data…");
+  setLoading("chart-language","Fetching language data…");
+  setLoading("chart-timeline","Fetching timeline data…");
+
+  let analytics;
+  try {
+    analytics = await api("/api/v1/analytics/campaign");
+  } catch (e) {
+    ["chart-product","chart-device","chart-language","chart-timeline"].forEach((id) =>
+      setError(id, `Analytics unavailable: ${e.message}`)
+    );
+    return;
+  }
+
+  const o = analytics.overall;
+  document.getElementById("kpi-sent").textContent     = Number(o.sent).toLocaleString();
+  document.getElementById("kpi-delivery").textContent = (o.delivery_rate * 100).toFixed(1) + "%";
+  document.getElementById("kpi-open").textContent     = (o.open_rate     * 100).toFixed(1) + "%";
+  document.getElementById("kpi-click").textContent    = (o.click_rate    * 100).toFixed(2) + "%";
+
+  // By-product bar chart
+  const cmp = analytics.by_campaign || [];
+  mkChart("chart-product", "bar",
+    cmp.map((c) => c.campaign_product || c.campaign_crop),
+    [
+      { label: "Open Rate %",  data: cmp.map((c) => +(c.open_rate  * 100).toFixed(2)), backgroundColor: "#1565c0" },
+      { label: "Click Rate %", data: cmp.map((c) => +(c.click_rate * 100).toFixed(2)), backgroundColor: "#1a7a3c" },
+    ],
+    { scales: { y: { beginAtZero: true, title: { display: true, text: "%" } } } }
+  );
+
+  // Device doughnut
+  const byDev = analytics.by_device || [];
+  mkChart("chart-device", "doughnut",
+    byDev.map((d) => d.device_type),
+    [{ data: byDev.map((d) => d.sent || 0), backgroundColor: ["#25a35a","#e6a817","#c62828"] }]
+  );
+
+  // Language pie  — use sent count if available, else click_rate as proxy weight
+  const byLang = analytics.by_language || [];
+  mkChart("chart-language", "pie",
+    byLang.map((l) => l.language),
+    [{ data: byLang.map((l) => l.sent || Math.round(l.click_rate * 10000)), backgroundColor: COLORS }]
+  );
+
+  // 3. Grower crop distribution (from /api/v1/growers)
+  setLoading("chart-crop", "Fetching crop distribution…");
+  try {
+    const gData = await api("/api/v1/growers?limit=200");
+    // Count crops from paginated sample then scale to total
+    const cropCount = {};
+    (gData.growers || []).forEach((g) => {
+      cropCount[g.crop] = (cropCount[g.crop] || 0) + 1;
+    });
+    mkChart("chart-crop", "bar",
+      Object.keys(cropCount),
+      [{ label: "Growers (sample)", data: Object.values(cropCount), backgroundColor: COLORS }],
+      { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    );
+  } catch (e) {
+    setError("chart-crop", `Grower data unavailable: ${e.message}`);
+  }
+
+  // 4. Message volume timeline — derive from by_campaign weekly window
+  // Use POS analytics monthly trend as proxy for timeline
+  try {
+    const pos = await api("/api/v1/analytics/pos");
+    const monthly = (pos.monthly_trend || []).slice(-6);
+    mkChart("chart-timeline", "bar",
+      monthly.map((m) => m.month),
+      [{ label: "POS Qty Sold", data: monthly.map((m) => m.qty), backgroundColor: "#1a7a3c" }],
+      {
+        plugins: { legend: { position: "top" } },
+        scales: { y: { beginAtZero: true, title: { display: true, text: "Units" } } },
+      }
+    );
+  } catch (e) {
+    setError("chart-timeline", `POS timeline unavailable: ${e.message}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// TAB: FUNNEL
+// ─────────────────────────────────────────────────────────────
+async function loadFunnelTab() {
+  window._funnelLoaded = true;
+
+  document.getElementById("funnel-viz").innerHTML =
+    '<div style="text-align:center;padding:24px;color:var(--muted)">⏳ Loading funnel data…</div>';
+  document.getElementById("funnel-table-body").innerHTML =
+    '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--muted)">⏳ Loading…</td></tr>';
+
+  let analytics;
+  try {
+    analytics = await api("/api/v1/analytics/campaign");
+  } catch (e) {
+    document.getElementById("funnel-viz").innerHTML =
+      `<div class="alert alert-warn">⚠️ Could not load funnel data: ${e.message}</div>`;
+    return;
+  }
+
+  const o = analytics.overall;
+
+  // Funnel visualisation
+  const steps = [
+    { label: "Sent",      val: o.sent,      pct: 1.0,              color: "#1565c0" },
+    { label: "Delivered", val: o.delivered, pct: o.delivery_rate,   color: "#25a35a" },
+    { label: "Opened",    val: o.opened,    pct: o.open_rate,       color: "#e6a817" },
+    { label: "Clicked",   val: o.clicked,   pct: o.click_rate,      color: "#c62828" },
+  ];
+  document.getElementById("funnel-viz").innerHTML = steps
+    .map(
+      (s) => `
+    <div class="funnel-row">
+      <div class="funnel-label">${s.label}</div>
+      <div class="funnel-bar-wrap">
+        <div class="funnel-bar" style="width:${(s.pct * 100).toFixed(1)}%;background:${s.color}">
+          ${(s.pct * 100).toFixed(1)}%
+        </div>
+      </div>
+      <div class="funnel-val">${Number(s.val).toLocaleString()}</div>
+    </div>`
+    )
+    .join("");
+
+  // Campaign breakdown table
+  document.getElementById("funnel-table-body").innerHTML = (analytics.by_campaign || [])
+    .map(
+      (c) => `
+    <tr>
+      <td>${c.campaign_id}</td>
+      <td>${c.campaign_crop}</td>
+      <td>${c.campaign_product}</td>
+      <td>${Number(c.messages_sent).toLocaleString()}</td>
+      <td>${Number(c.delivered).toLocaleString()}</td>
+      <td>${Number(c.opened).toLocaleString()}</td>
+      <td>${Number(c.clicked).toLocaleString()}</td>
+      <td>${(c.delivery_rate * 100).toFixed(1)}%</td>
+      <td>${(c.open_rate     * 100).toFixed(1)}%</td>
+      <td>${(c.click_rate    * 100).toFixed(2)}%</td>
+    </tr>`
+    )
+    .join("");
+
+  // Language click chart
+  const byLang = [...(analytics.by_language || [])].sort((a, b) => b.click_rate - a.click_rate);
+  setLoading("chart-lang-click");
+  mkChart("chart-lang-click", "bar",
+    byLang.map((l) => l.language),
+    [{ label: "Click Rate %", data: byLang.map((l) => +(l.click_rate * 100).toFixed(2)), backgroundColor: COLORS }],
+    { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  );
+
+  // State click chart
+  const byState = [...(analytics.by_state || [])].sort((a, b) => b.click_rate - a.click_rate).slice(0, 8);
+  setLoading("chart-state-click");
+  mkChart("chart-state-click", "bar",
+    byState.map((s) => s.state),
+    [{ label: "Click Rate %", data: byState.map((s) => +(s.click_rate * 100).toFixed(2)), backgroundColor: COLORS }],
+    { indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// TAB: GROWERS
+// ─────────────────────────────────────────────────────────────
+async function loadGrowerTable() {
+  window._growerLoaded = true;
+
+  const state  = document.getElementById("filter-state")?.value?.trim() || "";
+  const crop   = document.getElementById("filter-crop")?.value  || "";
+  const device = document.getElementById("filter-device")?.value || "";
+
+  let qs = "?limit=50";
+  if (state)  qs += `&state=${encodeURIComponent(state)}`;
+  if (crop)   qs += `&crop=${encodeURIComponent(crop)}`;
+  if (device) qs += `&device_type=${encodeURIComponent(device)}`;
+
+  const tbody = document.getElementById("grower-table-body");
+  tbody.innerHTML =
+    '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">⏳ Loading growers…</td></tr>';
+
+  let data;
+  try {
+    data = await api("/api/v1/growers" + qs);
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:20px;color:#842029">
+      ⚠️ Could not load growers: ${e.message}</td></tr>`;
+    return;
+  }
+
+  document.getElementById("grower-count").textContent = `(${(data.total || 0).toLocaleString()} total)`;
+
+  const BADGE = { smartphone: "badge-wa", keypad: "badge-ivr", unknown: "badge-rep" };
+  tbody.innerHTML = (data.growers || [])
+    .map(
+      (g) => `
+    <tr>
+      <td><code style="font-size:.78rem">${g.grower_id}</code></td>
+      <td>${g.state}</td>
+      <td>${g.tehsil}</td>
+      <td>${g.crop}</td>
+      <td>${g.language}</td>
+      <td><span class="badge ${BADGE[g.device_type] || "badge-medium"}">${g.device_type}</span></td>
+      <td>${g.grower_age}</td>
+      <td>${Number(g.grower_farm_size).toFixed(2)}</td>
+    </tr>`
+    )
+    .join("") || '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted)">No growers found.</td></tr>';
+}
+
+// ─────────────────────────────────────────────────────────────
+// TAB: CAMPAIGN PLANNER
+// ─────────────────────────────────────────────────────────────
+async function runCampaignPlan() {
+  const btn    = document.getElementById("btn-plan");
+  const status = document.getElementById("plan-status");
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Planning…';
+  status.textContent = "";
+  document.getElementById("plan-results").style.display = "none";
+
+  const payload = {
+    campaign_id:     document.getElementById("p-campaign-id").value.trim(),
+    target_crop:     document.getElementById("p-crop").value || null,
+    max_growers:     parseInt(document.getElementById("p-max-growers").value)  || 200,
+    min_receptivity: parseFloat(document.getElementById("p-min-rec").value)    || 0.03,
+    min_stock_rate:  parseFloat(document.getElementById("p-min-stock").value)  || 0.2,
+    api_key:         document.getElementById("p-api-key").value.trim(),
+  };
+
+  let result;
+  try {
+    result = await api("/api/v1/campaign/plan", "POST", payload);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = "▶ Run Campaign Plan";
+    status.textContent = "❌ " + e.message;
+    status.style.color = "#c62828";
+    return;
+  }
+
+  btn.disabled = false;
+  btn.textContent = "▶ Run Campaign Plan";
+  status.textContent = "✓ Plan generated";
+  status.style.color = "var(--green)";
+  renderPlanResults(result);
+}
+
+function renderPlanResults(r) {
+  document.getElementById("plan-results").style.display = "";
+  document.getElementById("plan-kpis").innerHTML = `
+    <div class="kpi">
+      <label>Growers Targeted</label>
+      <div class="val">${(r.total_growers_targeted || 0).toLocaleString()}</div>
+      <div class="sub">${r.campaign_id}</div>
+    </div>
+    <div class="kpi amber">
+      <label>Avg Receptivity</label>
+      <div class="val">${((r.avg_receptivity_score || 0) * 100).toFixed(1)}%</div>
+      <div class="sub">Predicted click probability</div>
+    </div>
+    <div class="kpi blue">
+      <label>Avg Stock Rate</label>
+      <div class="val">${((r.avg_stock_rate || 0) * 100).toFixed(0)}%</div>
+      <div class="sub">Retailers with product in stock</div>
+    </div>
+    <div class="kpi">
+      <label>Planned At</label>
+      <div class="val" style="font-size:1rem">${(r.planned_at || "").substring(0, 16).replace("T", " ")}</div>
+      <div class="sub">UTC</div>
+    </div>
+  `;
+
+  const cm = r.channel_mix || {};
+  if (Object.keys(cm).length) {
+    setLoading("chart-channel-mix");
+    mkChart("chart-channel-mix", "doughnut",
+      Object.keys(cm),
+      [{ data: Object.values(cm), backgroundColor: COLORS }],
+      { plugins: { legend: { position: "right" } } }
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// TAB: CONTENT DEMO
+// ─────────────────────────────────────────────────────────────
+let selectedFormat = "whatsapp_rich";
+document.querySelectorAll(".channel-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".channel-tab").forEach((t) => t.classList.remove("active"));
+    tab.classList.add("active");
+    selectedFormat = tab.dataset.fmt;
+  });
+});
+
+async function generateContent() {
+  const btn    = document.getElementById("btn-gen");
+  const status = document.getElementById("gen-status");
+  const output = document.getElementById("content-output");
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="border-top-color:#fff"></span> Generating…';
+  output.textContent = "Calling API…";
+  status.textContent = "";
+  document.getElementById("content-chars").textContent = "";
+  document.getElementById("content-model").textContent = "";
+
+  const payload = {
+    grower_id:          "GRW_DEMO_001",
+    crop:               document.getElementById("c-crop").value,
+    growth_stage:       document.getElementById("c-stage").value,
+    language:           document.getElementById("c-lang").value,
+    state:              document.getElementById("c-state").value,
+    tehsil:             "Demo_Tehsil",
+    content_format:     selectedFormat,
+    device_type:        "smartphone",
+    grower_name:        "किसान भाई",
+    active_threats:     [document.getElementById("c-threat").value].filter(Boolean),
+    days_to_next_stage: parseInt(document.getElementById("c-days").value) || 7,
+    farm_size_acres:    2.5,
+  };
+
+  const apiKey = document.getElementById("p-api-key")?.value?.trim() || "";
+  const qs     = apiKey ? `?api_key=${encodeURIComponent(apiKey)}` : "";
+
+  btn.disabled = false;
+  btn.textContent = "✨ Generate Content";
+
+  try {
+    const result = await api(`/api/v1/content/generate${qs}`, "POST", payload);
+    if (selectedFormat === "video_thumbnail" && result.video_thumbnail_url) {
+      output.innerHTML = `
+        <div style="margin-bottom:10px">
+          <img src="${result.video_thumbnail_url}" alt="${result.video_caption||''}"
+               style="max-width:100%;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.18)"/>
+        </div>
+        <div style="font-size:.82rem;color:var(--muted);margin-top:6px">
+          📝 Caption: ${result.video_caption || result.text}
+        </div>`;
+    } else {
+      output.textContent = result.text;
+      if (result.tts_audio_url && result.tts_audio_url.startsWith("data:audio")) {
+        const audio = document.createElement("audio");
+        audio.controls = true;
+        audio.src = result.tts_audio_url;
+        audio.style.cssText = "display:block;margin-top:10px;width:100%";
+        output.appendChild(audio);
+      }
+    }
+    document.getElementById("content-chars").textContent = `${result.char_count} chars`;
+    document.getElementById("content-model").textContent = `Model: ${result.llm_model}`;
+    status.textContent = "✓ Generated";
+    status.style.color = "var(--green)";
+  } catch (e) {
+    output.textContent = `⚠️ Error: ${e.message}\n\nMake sure the API server is running:\nuvicorn api.main:app --reload --port 8000`;
+    status.textContent = "❌ Failed";
+    status.style.color = "#c62828";
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Engine 3: Receptivity score demo
+// ─────────────────────────────────────────────────────────────
+async function scoreReceptivity() {
+  const el = document.getElementById("receptivity-result");
+  el.innerHTML = '<div style="color:var(--muted);font-size:.85rem">⏳ Scoring…</div>';
+
+  const payload = {
+    grower_id:                 "GRW_DEMO_002",
+    grower_age:                45,
+    grower_farm_size:          2.5,
+    language:                  "Hindi",
+    device_type:               document.getElementById("r-device").value,
+    crop:                      "wheat",
+    state:                     "Punjab",
+    gender:                    "male",
+    offline_campaign_attended: false,
+    product_scan:              false,
+    hist_open_rate:            parseFloat(document.getElementById("r-open").value),
+    hist_click_rate:           parseFloat(document.getElementById("r-click").value),
+    hist_delivery_rate:        0.98,
+    cum_messages:              3,
+    days_to_harvest:           parseInt(document.getElementById("r-harvest").value),
+    season_progress:           parseFloat(document.getElementById("r-season").value),
+    tehsil_stock_rate:         parseFloat(document.getElementById("r-stock").value),
+    days_since_rep_visit:      30,
+  };
+
+  let r;
+  try {
+    r = await api("/api/v1/receptivity/score", "POST", payload);
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-warn">⚠️ Scoring failed: ${e.message}</div>`;
+    return;
+  }
+
+  const TIER_COLOUR = { high: "badge-high", medium: "badge-medium", low: "badge-low" };
+  el.innerHTML = `
+    <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+      <div>
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:4px">Receptivity Score</div>
+        <div style="font-size:2.4rem;font-weight:700;color:var(--dark)">${(r.score * 100).toFixed(1)}%</div>
+      </div>
+      <div>
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:4px">Tier</div>
+        <span class="badge ${TIER_COLOUR[r.tier] || "badge-medium"}" style="font-size:.9rem;padding:5px 14px">${r.tier}</span>
+      </div>
+      <div>
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:4px">Recommended Action</div>
+        <div style="font-size:.9rem;font-weight:600">${r.recommended_action}</div>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Score</div>
+      <div class="progress-wrap">
+        <div class="progress-bar" style="width:${(r.score * 100).toFixed(1)}%"></div>
+      </div>
+    </div>
+    <div style="font-size:.75rem;color:var(--muted);margin-top:6px">Live result from /api/v1/receptivity/score</div>
+  `;
+}
+
+// ─────────────────────────────────────────────────────────────
+// TAB: ENGINES — bandit stats + health
+// ─────────────────────────────────────────────────────────────
+async function loadEnginesTab() {
+  setLoading("chart-bandit", "Fetching bandit arm data…");
+
+  // 1. Health card
+  try {
+    const health = await api("/health");
+    const ml = health.models_loaded || {};
+    // kmeans_clusterer is satisfied by hdbscan_clusterer (interchangeable)
+    if ("kmeans_clusterer" in ml) {
+      ml["kmeans_clusterer"] = ml["kmeans_clusterer"] || ml["hdbscan_clusterer"] || false;
+    }
+    const statusHtml = Object.entries(ml)
+      .map(([k, v]) => `
+        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:.82rem">${k}</span>
+          <span class="badge ${v ? "badge-high" : "badge-low"}">${v ? "✓ loaded" : "✗ missing"}</span>
+        </div>`)
+      .join("");
+    const card = document.getElementById("engine-health-content");
+    if (card) card.innerHTML = statusHtml;
+  } catch (e) {
+    const card = document.getElementById("engine-health-content");
+    if (card) card.innerHTML = `<div class="alert alert-warn">⚠️ API offline: ${e.message}</div>`;
+  }
+
+  // 2. Bandit arm chart
+  try {
+    const stats = await api("/api/v1/targeting/stats?top_n=10");
+    const arms  = stats.top_arms || [];
+    mkChart("chart-bandit", "bar",
+      arms.map((a) => a.arm.replace(/\|/g, " | ")),
+      [{ label: "Empirical Reward Rate", data: arms.map((a) => +a.empirical_reward.toFixed(4)), backgroundColor: COLORS }],
+      {
+        indexAxis: "y",
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              afterLabel: (ctx) => {
+                const arm = stats.top_arms[ctx.dataIndex];
+                return `Pulls: ${arm.pulls}`;
+              },
+            },
+          },
+        },
+        scales: { x: { beginAtZero: true, title: { display: true, text: "Reward Rate" } } },
+      }
+    );
+
+    // Bandit stats summary below chart
+    const summaryEl = document.getElementById("bandit-stats-summary");
+    if (summaryEl) {
+      summaryEl.innerHTML = `
+        <div style="display:flex;gap:24px;flex-wrap:wrap;padding:12px 0;font-size:.82rem;color:var(--muted)">
+          <span>Total rounds: <strong style="color:var(--dark)">${(stats.total_rounds || 0).toLocaleString()}</strong></span>
+          <span>Total arms: <strong style="color:var(--dark)">${stats.n_arms || 60}</strong></span>
+          <span>Best arm: <strong style="color:var(--dark)">${(stats.top_arms?.[0]?.arm || "—").replace(/\|/g, " | ")}</strong></span>
+        </div>`;
+    }
+  } catch (e) {
+    setError("chart-bandit", `Bandit stats unavailable: ${e.message}`);
+  }
+
+  // 3. Segment profiles summary
+  const segTable = document.getElementById("segment-summary-body");
+  if (segTable) {
+    segTable.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--muted)">⏳ Loading segments…</td></tr>';
+    try {
+      const segs = await api("/api/v1/segment/profiles?limit=8");
+      segTable.innerHTML = (segs.segments || [])
+        .map(
+          (s) => `
+        <tr>
+          <td><code style="font-size:.75rem">${s.segment_id}</code></td>
+          <td>${s.size}</td>
+          <td>${s.dominant_crop}</td>
+          <td>${s.dominant_language}</td>
+          <td><span class="badge ${s.dominant_device === "smartphone" ? "badge-wa" : s.dominant_device === "keypad" ? "badge-ivr" : "badge-rep"}">${s.dominant_device}</span></td>
+          <td>${(s.avg_click_rate * 100).toFixed(2)}%</td>
+        </tr>`
+        )
+        .join("") || '<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--muted)">No segments found. Run script 04 first.</td></tr>';
+
+      const totalEl = document.getElementById("segment-total");
+      if (totalEl) totalEl.textContent = ` (${segs.total_segments || "?"} total segments)`;
+    } catch (e) {
+      segTable.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:16px;color:#842029">⚠️ ${e.message}</td></tr>`;
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────────────────────
+window.addEventListener("DOMContentLoaded", loadOverview);
+</script>
+</body>
+</html>
