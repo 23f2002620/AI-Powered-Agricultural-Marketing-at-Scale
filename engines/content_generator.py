@@ -412,7 +412,7 @@ def synthesize_via_sarvam(text: str, language: str,
     API docs: https://docs.sarvam.ai/api-reference-docs/getting-started/models/bulbul
     Returns data-URI base64 WAV on success, None to trigger next fallback.
     """
-    sarvam_api_key="sk_3rgcx9gi_5h2NHUj1DuB2PYY6HbwlN5a4"
+    sarvam_api_key=""
     api_key = sarvam_api_key or os.getenv("SARVAM_API_KEY", "")
     if not api_key:
         return None
