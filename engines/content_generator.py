@@ -391,25 +391,34 @@ def build_user_prompt(req: ContentRequest) -> str:
         f"Use this greeting if the format supports it: '{greeting}'"
     )
 
+SARVAM_V3_SPEAKERS = {
+    "Hindi":     "kavya",
+    "Punjabi":   "aditya",
+    "Marathi":   "roopa",
+    "Gujarati":  "ritu",
+    "Kannada":   "gokul",
+    "Bengali":   "simran",
+    "Tamil":     "kavitha",    # was "Kavitha" — Sarvam requires lowercase
+    "Telugu":    "vijay",
+    "Odia":      "anand",
+    "Assamese":  "shruti",
+    "Malayalam": "mani",
+}
 
-# ---------------------------------------------------------------------------
-# TTS: Sarvam (cloud, higher quality) → pyttsx3 (offline fallback)
-# FIX: Original had no offline TTS — IVR channel broke silently without
-# SARVAM_API_KEY. Now pyttsx3 runs on-device. No key needed.
-# ---------------------------------------------------------------------------
 def synthesize_via_sarvam(text: str, language: str,
                            sarvam_api_key: str = "") -> Optional[str]:
     """
-    Sarvam AI TTS using the official sarvamai SDK.
-    Returns data-URI base64 WAV on success, or None to trigger local fallback.
-
-    Install: pip install sarvamai
+    Sarvam AI TTS using bulbul:v3 (current flagship model).
+    API docs: https://docs.sarvam.ai/api-reference-docs/getting-started/models/bulbul
+    Returns data-URI base64 WAV on success, None to trigger next fallback.
     """
+    sarvam_api_key="sk_3rgcx9gi_5h2NHUj1DuB2PYY6HbwlN5a4"
     api_key = sarvam_api_key or os.getenv("SARVAM_API_KEY", "")
     if not api_key:
-        return None  # No key → skip to local fallback
+        return None
 
     lang_meta = LANGUAGE_META.get(language, {"sarvam_code": "hi-IN"})
+    speaker   = SARVAM_V3_SPEAKERS.get(language, "Shubh")  # Shubh is v3 default
 
     try:
         from sarvamai import SarvamAI
@@ -417,25 +426,30 @@ def synthesize_via_sarvam(text: str, language: str,
         client = SarvamAI(api_subscription_key=api_key)
 
         response = client.text_to_speech.convert(
-            text=text[:500],                           # single str, NOT a list
+            text=text[:2500],                          # v3 supports up to 2500 chars
             target_language_code=lang_meta["sarvam_code"],
-            speaker="anushka",                         # valid v2/v3 speaker name
-            pitch=0,
-            pace=1.0,
-            loudness=1.5,
-            speech_sample_rate=8000,
-            enable_preprocessing=True,
-            model="bulbul:v2",                         # v1 is retired; v2 or v3
+            speaker=speaker,
+            model="bulbul:v3",                         # v2 is superseded; use v3
+            pace=1.0,                                  # range 0.5–2.0 on v3
+            speech_sample_rate=8000,                   # IVR-optimised sample rate
+            enable_preprocessing=True,                 # handles dates, numbers, mixed text
+            # NOTE: pitch and loudness are NOT supported on v3 — removed
         )
 
+        # SDK returns response.audios — a list of base64 strings
         audio_b64 = (response.audios or [""])[0]
-        return f"data:audio/wav;base64,{audio_b64}" if audio_b64 else None
+        if not audio_b64:
+            print(f"  [Sarvam] Empty audio returned for {language}/{speaker}")
+            return None
+
+        print(f"  [Sarvam] TTS OK — {language} / {speaker} / bulbul:v3 ({len(audio_b64)} b64 chars)")
+        return f"data:audio/wav;base64,{audio_b64}"
 
     except ImportError:
-        print("sarvamai not installed. Run: pip install sarvamai")
+        print("sarvamai SDK not installed. Run: pip install sarvamai")
         return None
     except Exception as e:
-        print(f"Sarvam TTS failed for {language}: {e} — falling back to local TTS.")
+        print(f"  [Sarvam] TTS failed for {language}: {e}")
         return None
 
 def synthesize_via_bhashini(text: str, language: str,
@@ -507,108 +521,26 @@ def synthesize_via_bhashini(text: str, language: str,
         return None
 
 
-# ---------------------------------------------------------------------------
-# pyttsx3 singleton — fixes "weakly-referenced object no longer exists"
-# ---------------------------------------------------------------------------
-# Root cause: pyttsx3.init() creates a new engine + espeak driver each call.
-# espeak registers C-level callbacks that hold a weakref to the Python driver.
-# If the engine is GC'd before the callback fires (common under FastAPI/threads),
-# the weakref is dead → ReferenceError in _onSynth.
-#
-# Fix: keep ONE engine alive at module level behind a threading.Lock.
-# The lock serialises concurrent IVR requests so espeak is never re-entered.
-# ---------------------------------------------------------------------------
-import threading as _threading
-
-_TTS_ENGINE = None          # module-level singleton
-_TTS_ENGINE_LOCK = _threading.Lock()
-
-
-def _get_tts_engine():
-    """Return the module-level pyttsx3 engine, initialising it once."""
-    global _TTS_ENGINE
-    if _TTS_ENGINE is None:
-        import pyttsx3
-        _TTS_ENGINE = pyttsx3.init()
-        _TTS_ENGINE.setProperty("rate", 140)   # slightly slower for rural comprehension
-        _TTS_ENGINE.setProperty("volume", 1.0)
-    return _TTS_ENGINE
-
-
-def synthesize_local_tts(text: str, language: str) -> Optional[str]:
-    """
-    Offline TTS using pyttsx3 (espeak on Linux, SAPI on Windows, NSSpeech on macOS).
-    No internet. No API key.
-
-    Install once: pip install pyttsx3
-    On Linux also: sudo apt-get install espeak espeak-data
-
-    Uses a module-level engine singleton to avoid the espeak weakref/GC crash:
-      ReferenceError: weakly-referenced object no longer exists
-    The threading.Lock serialises concurrent calls so espeak is never re-entered.
-    """
-    try:
-        import pyttsx3  # noqa: F401 — ensure import error is caught here
-
-        lang_meta = LANGUAGE_META.get(language, {})
-        lang_code = lang_meta.get("pyttsx3_lang", "hi")
-
-        with _TTS_ENGINE_LOCK:
-            engine = _get_tts_engine()
-
-            # Switch voice to the requested language if the OS has it
-            voices = engine.getProperty("voices")
-            for voice in voices:
-                if (lang_code in (voice.id or "").lower()
-                        or lang_code in (voice.name or "").lower()):
-                    engine.setProperty("voice", voice.id)
-                    break
-
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                tmp_path = tmp.name
-
-            engine.save_to_file(text, tmp_path)
-            engine.runAndWait()   # blocks until espeak finishes; engine still alive
-
-        with open(tmp_path, "rb") as f:
-            audio_bytes = f.read()
-        os.unlink(tmp_path)
-
-        audio_b64 = base64.b64encode(audio_bytes).decode()
-        return f"data:audio/wav;base64,{audio_b64}"
-
-    except ImportError:
-        print("pyttsx3 not installed. Run: pip install pyttsx3")
-        return f"[OFFLINE TTS unavailable — install pyttsx3 for {language} audio]"
-    except Exception as e:
-        print(f"Local TTS failed for {language}: {e}")
-        # Engine may be in a bad state — reset singleton so next call re-inits cleanly
-        global _TTS_ENGINE
-        _TTS_ENGINE = None
-        return f"[Local TTS error for {language}: {e}]"
-
-
 def synthesize_tts(text: str, language: str, sarvam_api_key: str = "",
                    bhashini_api_key: str = "") -> Optional[str]:
-    """
-    Unified TTS dispatcher.
-    Priority (solution doc): Bhashini (govt Indic, named in solution) →
-                             Sarvam (cloud quality) → pyttsx3 (offline fallback).
+    # ── DEBUG (remove after fixing) ──────────────────────────────────────────
+    b_key = bhashini_api_key or os.getenv("BHASHINI_API_KEY", "")
+    s_key = sarvam_api_key   or os.getenv("SARVAM_API_KEY", "")
+    print(f"  [TTS DEBUG] language={language}")
+    print(f"  [TTS DEBUG] bhashini_key={'SET ('+b_key[:6]+'...)' if b_key else 'MISSING'}")
+    print(f"  [TTS DEBUG] sarvam_key= {'SET ('+s_key[:6]+'...)' if s_key else 'MISSING'}")
+    # ─────────────────────────────────────────────────────────────────────────
 
-    Solution 1 Phase 3: "Deploy GenAI content engine with Bhashini for 11 languages"
-    Solution 2 Model 3: "LLM + Indic TTS (AI4Bharat)" / "Bhashini API"
-    """
-    # 1. Try Bhashini (solution doc primary IVR TTS)
     result = synthesize_via_bhashini(text, language, bhashini_api_key)
     if result is not None:
         return result
-    # 2. Try Sarvam (high-quality cloud fallback)
+
     result = synthesize_via_sarvam(text, language, sarvam_api_key)
     if result is not None:
         return result
-    # 3. Local pyttsx3 (always offline)
-    return synthesize_local_tts(text, language)
 
+    print(f"  [TTS] Bhashini and Sarvam both failed for {language} — check your API keys.")
+    return None
 
 # ---------------------------------------------------------------------------
 # Ollama local LLM — always tried first, no API key needed
@@ -862,7 +794,7 @@ def generate_content(req: ContentRequest, api_key: str = "",
                 from google import genai
                 from google.genai import types
                 os.environ["GEMINI_API_KEY"] = gemini_key
-                gemini_model = os.getenv("GEMINI_MODEL", "gemini-3-flash")
+                gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
                 client   = genai.Client()
                 response = client.models.generate_content(
                     model=gemini_model,

@@ -1,4 +1,4 @@
-# AI-Powered Hyper-Personalized Agricultural Marketing System
+# 🌾 KisanAI — AI-Powered Hyper-Personalized Agricultural Marketing System
 
 A closed-loop, omnichannel campaign engine for Rabi 2025-26 that targets ~6,000 Indian
 growers with the right message, channel, language, and timing — driven by four AI engines
