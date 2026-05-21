@@ -735,8 +735,8 @@ def _cli():
     # Resolve: CLI flag > .env > empty string
     batch = NightlyBatch(
         campaign_id=args.campaign,
-        api_key="AIzaSyCf2wk6tDzH8DSilXO5Hl2QkRH_C6GXAFU",
-        sarvam_api_key="sk_3rgcx9gi_5h2NHUj1DuB2PYY6HbwlN5a4",
+        api_key="",
+        sarvam_api_key="",
         bhashini_api_key=args.bhashini_key  or os.getenv("BHASHINI_API_KEY", ""),
         imd_key=args.imd_key         or os.getenv("IMD_API_KEY",      ""),
         ncipm_key=args.ncipm_key       or os.getenv("NCIPM_API_KEY",    ""),
