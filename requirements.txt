@@ -20,5 +20,4 @@ scipy>=1.11.0
 pyarrow
 fastparquet
 httpx
-ollama
 pyttsx3

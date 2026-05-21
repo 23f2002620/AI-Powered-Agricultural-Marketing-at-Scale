@@ -1,0 +1,16 @@
+{
+  "run_at": "2026-05-21T18:40:28.443202",
+  "queue_files": [
+    "/home/saravanan/Desktop/AI-powered personalized marketing for agriculture/results/message_queue_20260521.jsonl"
+  ],
+  "total_records": 200,
+  "dispatched": 0,
+  "with_engagement": 0,
+  "pos_attributed": 0,
+  "conversion_rate": 0.0,
+  "bandit_updates": 0,
+  "avg_reward": 0.0,
+  "top_5_arms": [],
+  "channel_conversion": {},
+  "bandit_total_rounds": 4479
+}

@@ -3,11 +3,8 @@ Engine 1: Context-Aware Content Generator
 
 WHAT CHANGED FROM ORIGINAL (offline-resilience fixes):
 -------------------------------------------------------
-1. GEMINI → OLLAMA (local):
-   - Original used Google Gemini API (cloud). If no internet, Engine 1 was dead.
-   - Now tries Ollama (local Llama-3 / Gemma) FIRST, Gemini as optional cloud upgrade.
-   - Run: `ollama pull llama3` once. After that, works 100% offline.
-   - Ollama is what the solution doc originally intended (Llama-3 / Gemma local model).
+1. GEMINI:
+   - Original used Google Gemini API (cloud). If not going to rule-based.
 
 2. SARVAM TTS → pyttsx3 LOCAL TTS (offline fallback):
    - Original: if SARVAM_API_KEY missing → returns a placeholder string. IVR breaks silently.
@@ -22,10 +19,9 @@ WHAT CHANGED FROM ORIGINAL (offline-resilience fixes):
    - All 11 languages produce correct native-script output offline.
 
 APIs still used (optional, degrade gracefully if absent):
-   - GEMINI_API_KEY  — cloud upgrade for richer content (optional)
-   - SARVAM_API_KEY  — higher-quality TTS audio for IVR (optional)
+   - GEMINI_API_KEY  — cloud upgrade for richer content
+   - SARVAM_API_KEY  — higher-quality TTS audio for IVR
    - STABILITY_API_KEY — real images for VIDEO_THUMBNAIL (optional)
-   - Without any key: system runs fully offline using Ollama + pyttsx3 + SVG thumbnails.
 """
 
 import os
@@ -398,7 +394,7 @@ SARVAM_V3_SPEAKERS = {
     "Gujarati":  "ritu",
     "Kannada":   "gokul",
     "Bengali":   "simran",
-    "Tamil":     "kavitha",    # was "Kavitha" — Sarvam requires lowercase
+    "Tamil":     "kavitha",
     "Telugu":    "vijay",
     "Odia":      "anand",
     "Assamese":  "shruti",
@@ -412,7 +408,7 @@ def synthesize_via_sarvam(text: str, language: str,
     API docs: https://docs.sarvam.ai/api-reference-docs/getting-started/models/bulbul
     Returns data-URI base64 WAV on success, None to trigger next fallback.
     """
-    sarvam_api_key=""
+    sarvam_api_key="sk_3rgcx9gi_5h2NHUj1DuB2PYY6HbwlN5a4"
     api_key = sarvam_api_key or os.getenv("SARVAM_API_KEY", "")
     if not api_key:
         return None
@@ -542,92 +538,6 @@ def synthesize_tts(text: str, language: str, sarvam_api_key: str = "",
     print(f"  [TTS] Bhashini and Sarvam both failed for {language} — check your API keys.")
     return None
 
-# ---------------------------------------------------------------------------
-# Ollama local LLM — always tried first, no API key needed
-# ---------------------------------------------------------------------------
-
-def _check_ollama_running() -> bool:
-    """Ping Ollama. Auto-selects the first available model if OLLAMA_MODEL
-    is not set or does not match any installed model."""
-    try:
-        import httpx
-        resp = httpx.get("http://localhost:11434/api/tags", timeout=5)
-        if resp.status_code == 200:
-            models = [m["name"] for m in resp.json().get("models", [])]
-            if not models:
-                print(f"  [LLM 1/3] Ollama running but no models installed.")
-                print(f"  [LLM 1/3] Run: ollama pull gemma3  (or llama3, mistral, etc.)")
-                return False
-            requested = os.getenv("OLLAMA_MODEL", "")
-            # Auto-select: if env var missing or not matching any installed model, use first
-            if not requested or not any(requested.split(":")[0] in m for m in models):
-                auto = models[0]
-                os.environ["OLLAMA_MODEL"] = auto
-                print(f"  [LLM 1/3] Ollama running. Models: {models}")
-                print(f"  [LLM 1/3] Auto-selected model: {auto}")
-            else:
-                print(f"  [LLM 1/3] Ollama running. Models: {models} — using: {requested}")
-            return True
-        return False
-    except Exception as e:
-        print(f"  [LLM 1/3] Ollama not reachable: {e}")
-        print(f"  [LLM 1/3] Start it with: ollama serve")
-        return False
-
-def _generate_via_ollama(system_prompt: str, user_prompt: str,
-                          max_tokens: int = 300) -> Optional[str]:
-    try:
-        import httpx
-        model = os.getenv("OLLAMA_MODEL", "gemma4:latest")
-        # Thinking models (gemma4, deepseek-r1, qwq) use tokens for reasoning.
-        # Give them 3× the requested output tokens so they don't truncate.
-        is_thinking_model = any(x in model.lower() for x in ["gemma4", "gemma3", "deepseek-r1", "qwq", "thinking"])
-        predict_tokens = max(max_tokens, 512) * (3 if is_thinking_model else 1)
-        # Keep system prompt under 2000 chars for local models to avoid OOM
-        trimmed_system = system_prompt[:2000] if len(system_prompt) > 2000 else system_prompt
-        print(f"  [LLM 1/3] model={model} predict={predict_tokens} thinking_model={is_thinking_model}")
-        resp  = httpx.post(
-            "http://localhost:11434/api/chat",
-            json={
-                "model":  model,
-                "stream": False,
-                "options": {
-                    "num_predict": predict_tokens,
-                    "temperature": 0.7,
-                    "num_ctx": 8192,
-                },
-                "messages": [
-                    {"role": "system", "content": trimmed_system},
-                    {"role": "user",   "content": user_prompt},
-                ],
-            },
-            timeout=180,  # thinking models on CPU can take 2-3 min
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        stop_reason = data.get("done_reason", "unknown")
-        msg     = data.get("message", {})
-        content = (msg.get("content") or "").strip()
-        thinking = (msg.get("thinking") or "").strip()
-
-        # gemma4 and other thinking models sometimes put the answer in
-        # "thinking" and leave "content" empty on complex prompts.
-        # Use content if present, otherwise extract the last paragraph of thinking.
-        if content:
-            text = content
-        elif thinking:
-            # thinking contains the reasoning + final answer separated by blank line
-            # The actual answer is usually the last non-empty paragraph
-            paragraphs = [p.strip() for p in thinking.split("\n\n") if p.strip()]
-            text = paragraphs[-1] if paragraphs else ""
-        else:
-            text = ""
-
-        print(f"  [LLM 1/3] done_reason={stop_reason} content={len(content)}chars thinking={len(thinking)}chars used={len(text)}chars")
-        return text if text else None
-    except Exception as e:
-        print(f"  [LLM 1/3] Ollama generation error: {e}")
-        return None
 
 # ---------------------------------------------------------------------------
 # Visual / Video thumbnail (unchanged from original — SVG fallback already works)
@@ -773,23 +683,11 @@ def generate_content(req: ContentRequest, api_key: str = "",
     text      = None
     llm_model = "rule_based_fallback"
 
-    # ── STEP 1: Ollama (local, always tried first) ───────────────────────────
-    if _check_ollama_running():
-        print(f"  [LLM 1/3] Generating with Ollama...")
-        text = _generate_via_ollama(system_prompt, user_prompt, max_tokens)
-        if text:
-            llm_model = os.getenv("OLLAMA_MODEL", "gemma4:latest") + "@ollama-local"
-            print(f"  [LLM 1/3] Ollama succeeded ({len(text)} chars)")
-        else:
-            print(f"  [LLM 1/3] Ollama returned empty — trying Gemini.")
-    else:
-        print(f"  [LLM 1/3] Ollama not running — skipping to Gemini.")
-
     # ── STEP 2: Gemini (cloud, only if Ollama failed/unavailable) ────────────
     if text is None:
         gemini_key = api_key or os.getenv("GEMINI_API_KEY", "")
         if gemini_key:
-            print(f"  [LLM 2/3] Trying Gemini...")
+            print(f"  [LLM 1/2] Trying Gemini...")
             try:
                 from google import genai
                 from google.genai import types
@@ -810,23 +708,23 @@ def generate_content(req: ContentRequest, api_key: str = "",
                 if raw and raw.strip():
                     text      = raw.strip()
                     llm_model = gemini_model
-                    print(f"  [LLM 2/3] Gemini succeeded ({len(text)} chars)")
+                    print(f"  [LLM 1/2] Gemini succeeded ({len(text)} chars)")
                 else:
-                    print(f"  [LLM 2/3] Gemini returned empty/blocked response.")
+                    print(f"  [LLM 1/2] Gemini returned empty/blocked response.")
             except Exception as e:
                 msg = str(e)
                 if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-                    print(f"  [LLM 2/3] Gemini quota exhausted (429) — falling through.")
+                    print(f"  [LLM 1/2] Gemini quota exhausted (429) — falling through.")
                 elif "503" in msg or "UNAVAILABLE" in msg:
-                    print(f"  [LLM 2/3] Gemini overloaded (503) — falling through.")
+                    print(f"  [LLM 1/2] Gemini overloaded (503) — falling through.")
                 else:
-                    print(f"  [LLM 2/3] Gemini error: {msg}")
+                    print(f"  [LLM 1/2] Gemini error: {msg}")
         else:
-            print(f"  [LLM 2/3] Gemini skipped — GEMINI_API_KEY not set.")
+            print(f"  [LLM 1/2] Gemini skipped — GEMINI_API_KEY not set.")
 
     # ── STEP 3: Rule-based fallback (always works, all 11 languages) ─────────
     if text is None:
-        print(f"  [LLM 3/3] Using rule-based fallback.")
+        print(f"  [LLM 2/2] Using rule-based fallback.")
         return _rule_based_fallback(req, sarvam_api_key, bhashini_api_key)
 
     # ── TTS for IVR ───────────────────────────────────────────────────────────
